@@ -1,0 +1,71 @@
+id: collect_lba_opportunities
+namespace: alternance.data_engineering
+
+tasks:
+  - id: fetch_lba_opportunities
+    type: io.kestra.plugin.core.http.Request
+
+    uri: https://api.apprentissage.beta.gouv.fr/api/job/v1/search
+    method: GET
+
+    headers:
+      Authorization: "Bearer {{ secret('LBA_API_KEY') }}"
+      Accept: application/json
+
+    params:
+      romes: "{{ json(read('config/search_config.json')).la_bonne_alternance.rome_codes | join(',') }}"
+
+    options:
+      allowedResponseCodes:
+        - 200
+      connectTimeout: PT10S
+      readTimeout: PT30S
+      maxContentLength: 52428800
+
+    retry:
+      type: constant
+      interval: PT30S
+      maxAttempts: 3
+      maxDuration: PT5M
+      warningOnRetry: false
+
+  - id: process_lba_opportunities
+    type: io.kestra.plugin.scripts.python.Commands
+
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+
+    containerImage: python:3.12-slim
+
+    namespaceFiles:
+      enabled: true
+      include:
+        - scripts/process_lba_opportunities.py
+
+    inputFiles:
+      lba_response.json: "{{ outputs.fetch_lba_opportunities.body }}"
+
+    outputFiles:
+      - processed_opportunities.json
+
+    commands:
+      - python scripts/process_lba_opportunities.py lba_response.json processed_opportunities.json
+
+errors:
+  - id: notify_discord
+    type: io.kestra.plugin.discord.DiscordIncomingWebhook
+
+    url: "{{ secret('DISCORD_WEBHOOK') }}"
+
+    payload: |
+      {
+        "username": "Kestra",
+        "content": "Échec du flow {{ flow.namespace }}.{{ flow.id }} — exécution {{ execution.id }}. Consulte les logs dans Kestra."
+      }
+
+triggers:
+  - id: every_morning
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 8 * * *"
+    timezone: Europe/Paris
+    recoverMissedSchedules: LAST
