@@ -1,7 +1,7 @@
 # Secrets
 .env
+.env_encoded
 .env.*
-!.env.example
 
 # Python
 __pycache__/
@@ -25,3 +25,6 @@ outputs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Backups internes au projet
+backups/

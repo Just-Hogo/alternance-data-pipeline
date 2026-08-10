@@ -40,7 +40,8 @@ tasks:
     namespaceFiles:
       enabled: true
       include:
-        - scripts/process_lba_opportunities.py
+        - glob:/scripts/**/*.py
+        - /config/search_config.json
 
     inputFiles:
       lba_response.json: "{{ outputs.fetch_lba_opportunities.body }}"

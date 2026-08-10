@@ -1,0 +1,109 @@
+name: pipeline-candidatures
+
+volumes:
+  postgres-data:
+    driver: local
+
+  kestra-data:
+    driver: local
+
+  alternance-postgres-data:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+    environment:
+      POSTGRES_DB: ${KESTRA_POSTGRES_DB}
+      POSTGRES_USER: ${KESTRA_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${KESTRA_POSTGRES_PASSWORD}
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kestra:
+    image: kestra/kestra:v1.3.31
+    restart: unless-stopped
+    stop_grace_period: 6m
+    user: "root"
+    command: server standalone
+
+    volumes:
+      - kestra-data:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/kestra-wd:/tmp/kestra-wd
+
+    environment:
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/${KESTRA_POSTGRES_DB}
+            driverClassName: org.postgresql.Driver
+            username: ${KESTRA_POSTGRES_USER}
+            password: ${KESTRA_POSTGRES_PASSWORD}
+
+        kestra:
+          repository:
+            type: postgres
+
+          storage:
+            type: local
+            local:
+              base-path: "/app/storage"
+
+          queue:
+            type: postgres
+
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+
+          url: http://localhost:8090/
+
+    ports:
+      - "127.0.0.1:8090:8080"
+      - "127.0.0.1:8091:8081"
+
+    env_file:
+      - .env_encoded
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  alternance-postgres:
+    image: postgres:18
+    restart: unless-stopped
+
+    volumes:
+      - alternance-postgres-data:/var/lib/postgresql
+
+    environment:
+      POSTGRES_DB: ${ALTERNANCE_POSTGRES_DB}
+      POSTGRES_USER: ${ALTERNANCE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${ALTERNANCE_POSTGRES_PASSWORD}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
