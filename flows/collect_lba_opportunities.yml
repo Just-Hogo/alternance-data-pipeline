@@ -49,7 +49,7 @@ tasks:
       - processed_opportunities.json
 
     commands:
-      - python scripts/process_lba_opportunities.py lba_response.json processed_opportunities.json
+      - python scripts/process_lba_opportunities.py lba_response.json config/search_config.json processed_opportunities.json
 
 errors:
   - id: notify_discord
