@@ -29,7 +29,32 @@ tasks:
       maxDuration: PT5M
       warningOnRetry: false
 
-  - id: process_lba_opportunities
+
+  - id: define_ingestion_context
+    type: io.kestra.plugin.core.execution.SetVariables
+
+    variables:
+
+      collected_at: >-
+        {{ execution.startDate
+            | date("yyyy-MM-dd'T'HH:mm:ssX", timeZone="UTC") }}
+
+      raw_file_path: >-
+        /data/raw/lba/raw_{{ execution.startDate
+            | date('yyyy_MM_dd', timeZone='UTC') }}_{{ execution.id }}.json
+
+      fetched_offer_count: >-
+        {{ outputs.fetch_lba_opportunities.body
+            | jq('(.jobs // []) | length')
+            | first }}
+
+
+  - id: log_fetched_opportunities
+    type: io.kestra.plugin.core.log.Log
+    message: "{{ vars.fetched_offer_count }} offres récupérées"
+
+
+  - id: create_raw_json
     type: io.kestra.plugin.scripts.python.Commands
 
     taskRunner:
@@ -40,33 +65,63 @@ tasks:
     namespaceFiles:
       enabled: true
       include:
-        - glob:/scripts/**/*.py
-        - /config/search_config.json
+        - /scripts/create_raw_json.py
 
     inputFiles:
       lba_response.json: "{{ outputs.fetch_lba_opportunities.body }}"
 
+    env:
+      EXECUTION_ID: "{{ execution.id }}"
+      EXECUTION_DATE: "{{ execution.startDate | date('yyyy_MM_dd', timeZone='UTC') }}"
+
     outputFiles:
-      - processed_opportunities.json
+      - "raw_{{ execution.startDate | date('yyyy_MM_dd', timeZone='UTC') }}_{{ execution.id }}.json"
 
     commands:
-      - python scripts/process_lba_opportunities.py lba_response.json config/search_config.json processed_opportunities.json
+      - python scripts/create_raw_json.py lba_response.json
 
-errors:
-  - id: notify_discord
-    type: io.kestra.plugin.discord.DiscordIncomingWebhook
 
-    url: "{{ secret('DISCORD_WEBHOOK') }}"
+  - id: archive_raw_json
+    type: io.kestra.plugin.fs.local.Upload
 
-    payload: |
-      {
-        "username": "Kestra",
-        "content": "Échec du flow {{ flow.namespace }}.{{ flow.id }} — exécution {{ execution.id }}. Consulte les logs dans Kestra."
-      }
+    from: "{{ outputs.create_raw_json.outputFiles | values | first }}"
 
-triggers:
-  - id: every_morning
-    type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 8 * * *"
-    timezone: Europe/Paris
-    recoverMissedSchedules: LAST
+    to: '{{ vars.raw_file_path }}'
+
+    overwrite: false
+
+
+  - id: insert_into_ingestion_runs
+    type: io.kestra.plugin.jdbc.postgresql.Query
+
+    url: "jdbc:postgresql://alternance-postgres:5432/alternance"
+    username: "{{ secret('ALTERNANCE_POSTGRES_USERNAME') }}"
+    password: "{{ secret('ALTERNANCE_POSTGRES_PASSWORD') }}"
+
+    sql: |
+      INSERT INTO lba.ingestion_runs (
+        kestra_execution_id,
+        collected_at,
+        raw_file_path,
+        fetched_offer_count
+      )
+      VALUES (
+        '{{ execution.id }}',
+        '{{ vars.collected_at }}',
+        '{{ vars.raw_file_path }}',
+        {{ vars.fetched_offer_count }}
+      );
+
+
+
+outputs:
+  - id: raw_file
+    type: FILE
+    value: "{{ outputs.create_raw_json.outputFiles | values | first }}"
+
+  - id: failed_task_id
+    type: STRING
+    value: >-
+      {{ tasksWithState('FAILED') | length > 0
+          ? tasksWithState('FAILED')[0]['taskId']
+          : '' }}

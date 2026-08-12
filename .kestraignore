@@ -1,0 +1,10 @@
+# Tout ignorer
+*
+
+# Conserver uniquement les Namespace Files utiles
+!config/
+!config/**
+!scripts/
+!scripts/**
+!sql/
+!sql/**

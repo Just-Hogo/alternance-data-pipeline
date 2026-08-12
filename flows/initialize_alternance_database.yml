@@ -1,0 +1,30 @@
+id: initialize_alternance_database
+namespace: alternance.data_engineering
+
+pluginDefaults:
+  - type: io.kestra.plugin.jdbc.postgresql
+    values:
+      url: "jdbc:postgresql://alternance-postgres:5432/alternance"
+      username: "{{ secret('ALTERNANCE_POSTGRES_USERNAME') }}"
+      password: "{{ secret('ALTERNANCE_POSTGRES_PASSWORD') }}"
+
+tasks:
+  - id: create_lba_schema
+    type: io.kestra.plugin.jdbc.postgresql.Queries
+    sql: "{{ read('sql/initialization/001_create_lba_schema.sql') }}"
+
+  - id: create_ingestion_runs
+    type: io.kestra.plugin.jdbc.postgresql.Queries
+    sql: "{{ read('sql/initialization/002_create_ingestion_runs.sql') }}"
+
+  - id: create_job_offers
+    type: io.kestra.plugin.jdbc.postgresql.Queries
+    sql: "{{ read('sql/initialization/003_create_job_offers.sql') }}"
+
+  - id: create_job_offer_content
+    type: io.kestra.plugin.jdbc.postgresql.Queries
+    sql: "{{ read('sql/initialization/004_create_job_offer_content.sql') }}"
+
+  - id: create_indexes
+    type: io.kestra.plugin.jdbc.postgresql.Queries
+    sql: "{{ read('sql/initialization/005_create_indexes.sql') }}"

@@ -44,6 +44,7 @@ services:
       - kestra-data:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/kestra-wd:/tmp/kestra-wd
+      - ./data/raw:/data/raw
 
     environment:
       KESTRA_CONFIGURATION: |
@@ -71,6 +72,13 @@ services:
               path: /tmp/kestra-wd/tmp
 
           url: http://localhost:8090/
+
+        plugins:
+          configurations:
+            - type: io.kestra.plugin.fs.local.Upload
+              values:
+                allowed-paths:
+                  - /data/raw
 
     ports:
       - "127.0.0.1:8090:8080"

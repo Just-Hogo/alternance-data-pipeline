@@ -1,0 +1,57 @@
+id: run_pipeline
+namespace: alternance.data_engineering
+
+# Pour récupérer un output enfant dans le parent : outputs.CHILD_IDTASK.outputs.OUTPUT_ID
+
+tasks:
+  # Ce flow fait:
+  # 1 - Appelle l'API de 'La bonne alternance'.
+  # 2 - Créer un fichier .json qui contient les offres récupérées.
+  # 3 - Créer une copie du fichier .json sur le dépôt local.
+  # 4 - Écrit une ligne dans la base métier dans la table 'ingestion_runs'.
+  - id: start_collect_lba_opportunities
+    type: io.kestra.plugin.core.flow.Subflow
+
+    namespace: alternance.data_engineering
+    flowId: collect_lba_opportunities
+
+    wait: true
+    transmitFailed: true
+
+
+  # À activer lorsque le flow de traitement sera prêt.
+  # - id: start_process_lba_opportunities
+  #   type: io.kestra.plugin.core.flow.Subflow
+  #
+  #   namespace: alternance.data_engineering
+  #   flowId: process_lba_opportunities
+  #
+  #   wait: true
+  #   transmitFailed: true
+  #
+  #   inputs:
+  #     raw_file: "{{ outputs.start_collect_lba_opportunities.outputs.raw_file }}"
+
+
+
+errors:
+  - id: notify_discord
+    type: io.kestra.plugin.discord.DiscordIncomingWebhook
+
+    url: "{{ secret('DISCORD_WEBHOOK') }}"
+
+    payload: |
+      {
+        "username": "Kestra",
+        "content": "Échec du pipeline {{ flow.namespace }}.{{ flow.id }} — exécution {{ execution.id }}.\nÉchec lors de l’exécution de la tâche {{ outputs.start_collect_lba_opportunities.outputs.failed_task_id | default('inconnue') }}.\nPour plus de détails, consultez les logs dans Kestra."
+      }
+
+
+
+triggers:
+  - id: every_morning
+    type: io.kestra.plugin.core.trigger.Schedule
+
+    cron: "30 8 * * *"
+    timezone: Europe/Paris
+    recoverMissedSchedules: LAST
