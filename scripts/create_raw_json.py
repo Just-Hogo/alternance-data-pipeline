@@ -3,7 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-
 response_path = Path(sys.argv[1])
 
 with response_path.open(encoding="utf-8") as file:
